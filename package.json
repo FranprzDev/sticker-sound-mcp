@@ -1,0 +1,15 @@
+{
+  "name": "sticker-sound-mcp",
+  "version": "0.1.0",
+  "description": "MCP server that turns images, GIFs and videos into WhatsApp stickers, with a companion sound clip and a sound-sticker video. Free, local, ffmpeg only.",
+  "type": "module",
+  "main": "src/server.js",
+  "bin": { "sticker-sound-mcp": "src/server.js" },
+  "scripts": { "start": "node src/server.js", "test": "node --test test/*.test.js" },
+  "engines": { "node": ">=20" },
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "zod": "^3.25.0"
+  }
+}
