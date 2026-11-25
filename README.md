@@ -1,0 +1,49 @@
+# sticker-sound-mcp
+
+MCP server that makes WhatsApp stickers from images, GIFs and videos, including "sticker with sound". Free, local, only needs Node 20+ and ffmpeg.
+
+WhatsApp stickers cannot play audio. A sound sticker is made of three files that work together:
+
+1. `.webp` sticker (512x512, auto-shrunk under WhatsApp's limits: 100 KB static, 500 KB animated, max 10 s)
+2. `.ogg` Opus clip with the sound (send it right after the sticker, it plays as a voice note)
+3. `.mp4` 512x512 video where picture and sound play together (send it when you want one single message with sound)
+
+## Tools
+
+| Tool | What it does |
+| --- | --- |
+| `create_sticker` | Image/GIF/video to WebP sticker. Optional caption, `contain` or `cover` fit, start and duration. |
+| `create_sound_sticker` | Same, plus the `.ogg` and `.mp4`. Sound comes from the video, or from a separate `audio` file/URL. |
+| `inspect_sticker` | Validates a `.webp` against the WhatsApp rules above. |
+
+Sources can be local paths or http(s) URLs (100 MB cap).
+
+## Install
+
+```bash
+git clone https://github.com/FranprzDev/sticker-sound-mcp && cd sticker-sound-mcp
+npm install
+```
+
+MCP client config:
+
+```json
+{
+  "mcpServers": {
+    "sticker-sound": {
+      "command": "node",
+      "args": ["/absolute/path/sticker-sound-mcp/src/server.js"],
+      "env": { "STICKER_OUT_DIR": "/home/you/stickers" }
+    }
+  }
+}
+```
+
+Env vars: `STICKER_OUT_DIR` (default `~/stickers`), `FFMPEG_PATH`, `FFPROBE_PATH`, `STICKER_FONT` (a .ttf for captions; DejaVu, Liberation and Arial are found automatically). ffmpeg needs `libwebp`, `libopus`, `libx264` (standard builds have them).
+
+## Test
+
+```bash
+npm test
+```
+Tests generate their own media with ffmpeg and check real outputs. No network, no API keys.
