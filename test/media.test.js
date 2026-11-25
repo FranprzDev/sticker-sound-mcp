@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { run, FFMPEG, createSticker, createSoundSticker, inspectSticker, probe } from "../src/media.js";
+import { run, FFMPEG, createSticker, createSoundSticker, inspectSticker, probe, prepareNativeSoundSticker } from "../src/media.js";
 
 const dir = mkdtempSync(join(tmpdir(), "stk-test-"));
 const clip = join(dir, "clip.mp4");
@@ -49,4 +49,13 @@ test("separate audio over a still image", async () => {
 test("errors are clear", async () => {
   await assert.rejects(createSticker({ source: join(dir, "nope.png") }), /File not found/);
   await assert.rejects(createSoundSticker({ source: photo, outDir: dir }), /No audio found/);
+});
+
+test("native sound sticker prep gives a 512x512 clip of at most 5 s with audio", async () => {
+  const r = await prepareNativeSoundSticker({ source: clip, duration: 9, outDir: dir });
+  assert.equal(r.durationSeconds, 5);
+  const i = await probe(r.clip.path);
+  assert.equal(i.hasAudio, true);
+  assert.equal(i.width, 512);
+  assert.equal(i.height, 512);
 });
