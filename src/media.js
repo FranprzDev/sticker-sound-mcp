@@ -150,7 +150,7 @@ export async function createSticker({ source, start = 0, duration = 6, caption, 
 }
 
 /**
- * WhatsApp stickers cannot carry audio. A "sound sticker" is therefore three files:
+ * Fallback for accounts without native sound stickers: three files:
  * the WebP sticker, an Opus .ogg clip (sends as a voice note), and a 512x512 MP4 with the sound.
  */
 export async function createSoundSticker({ source, audio, start = 0, duration = 6, audioStart, caption, fit = "contain", name, outDir = OUT_DIR }) {
@@ -185,6 +185,44 @@ export async function createSoundSticker({ source, audio, start = 0, duration = 
     return { sticker, audio: { path: ogg, bytes: statSync(ogg).size }, video: { path: mp4, bytes: statSync(mp4).size }, durationSeconds: dur };
   } finally {
     await src.cleanup(); if (aud) await aud.cleanup(); await cap.cleanup();
+  }
+}
+
+/**
+ * Native WhatsApp "sound stickers" (Android beta 2.26.47.1+) are created inside the app and use a
+ * format with no public spec, so they cannot be generated from outside. This prepares the inputs
+ * for the in-app flow: a 512x512 clip (max 5 s when the original audio is kept) and an optional
+ * separate audio file (max 10 s) to import with the "Add sound" button.
+ */
+export async function prepareNativeSoundSticker({ source, audio, start = 0, duration = 5, audioStart = 0, name, outDir = OUT_DIR }) {
+  const src = await fetchSource(source);
+  const aud = audio ? await fetchSource(audio) : null;
+  try {
+    const vInfo = await probe(src.path);
+    if (!vInfo.hasVideo) throw new Error("Source has no video stream.");
+    if (!aud && !vInfo.hasAudio) throw new Error("No audio found. Pass `audio` or use a video with sound.");
+    const dur = Math.min(Math.max(duration, 0.5), aud ? LIMITS.maxSeconds : 5);
+    await mkdir(outDir, { recursive: true });
+    const base = join(outDir, `${name ? slug(name) : slug(source)}-native-${Date.now().toString(36)}`);
+    const clip = `${base}.mp4`;
+    const vf = "scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p";
+    const args = ["-y", "-v", "error", "-ss", String(start), "-t", String(dur), "-i", src.path];
+    if (!aud) args.push("-map", "0:v:0", "-map", "0:a:0");
+    else args.push("-an");
+    args.push("-vf", vf, "-r", "24", "-c:v", "libx264", "-preset", "veryfast", "-crf", "26", "-pix_fmt", "yuv420p");
+    if (!aud) args.push("-c:a", "aac", "-b:a", "96k");
+    args.push("-movflags", "+faststart", clip);
+    await run(FFMPEG, args);
+    const out = { clip: { path: clip, bytes: statSync(clip).size }, durationSeconds: dur,
+      steps: "In WhatsApp beta for Android 2.26.47.1+: sticker keyboard > Create sticker > pick the clip > tap the audio button > keep original audio / import the audio file / record > send." };
+    if (aud) {
+      const ogg = `${base}.m4a`;
+      await run(FFMPEG, ["-y", "-v", "error", "-ss", String(audioStart), "-t", String(dur), "-i", aud.path, "-vn", "-c:a", "aac", "-b:a", "96k", ogg]);
+      out.audio = { path: ogg, bytes: statSync(ogg).size };
+    }
+    return out;
+  } finally {
+    await src.cleanup(); if (aud) await aud.cleanup();
   }
 }
 
